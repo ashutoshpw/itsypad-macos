@@ -207,11 +207,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSTool
     }
 
     func application(_ application: NSApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
-        print("[CloudSync] APNs registration OK")
     }
 
     func application(_ application: NSApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
-        print("[CloudSync] APNs registration FAILED: \(error)")
     }
 
     func applicationDidBecomeActive(_ notification: Notification) {

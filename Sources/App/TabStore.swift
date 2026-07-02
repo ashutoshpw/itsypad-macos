@@ -425,7 +425,6 @@ class TabStore: ObservableObject {
             // alone protects local content during a first sync too; a blanket
             // first-sync suppression silently drops legitimate remote edits
             guard data.lastModified > tabs[localIndex].lastModified else {
-                print("[CloudSync] applyCloudTab: skipped \(data.id.uuidString.prefix(8)) – local newer (local=\(tabs[localIndex].lastModified) cloud=\(data.lastModified))")
                 return
             }
             if tabs[localIndex].content != data.content

@@ -106,10 +106,6 @@ final class CloudSyncEngine: @unchecked Sendable {
         )
         configuration.automaticallySync = true
         syncEngine = CKSyncEngine(configuration)
-        print("[CloudSync] started firstSync=\(isFirstSync) metadataCount=\(recordMetadata.count)")
-        container?.accountStatus { status, error in
-            print("[CloudSync] accountStatus=\(status.rawValue) error=\(String(describing: error))")
-        }
 
         if isFirstSync {
             syncEngine?.state.add(pendingDatabaseChanges: [.saveZone(CKRecordZone(zoneID: zoneID))])
@@ -142,16 +138,12 @@ final class CloudSyncEngine: @unchecked Sendable {
     func fetchChanges() {
         dispatchPrecondition(condition: .onQueue(.main))
         guard let engine = syncEngine else {
-            print("[CloudSync] fetchChanges: no engine")
             return
         }
-        print("[CloudSync] fetchChanges: starting")
         Task {
             do {
                 try await engine.fetchChanges()
-                print("[CloudSync] fetchChanges: completed")
             } catch {
-                print("[CloudSync] fetchChanges: FAILED \(error)")
             }
         }
     }
@@ -384,7 +376,6 @@ extension CloudSyncEngine: CKSyncEngineDelegate {
 
     @MainActor
     private func processEvent(_ event: CKSyncEngine.Event, syncEngine: CKSyncEngine) {
-        print("[CloudSync] event: \(event)")
         switch event {
         case .stateUpdate(let stateUpdate):
             saveStateSerialization(stateUpdate.stateSerialization)
@@ -445,12 +436,10 @@ extension CloudSyncEngine: CKSyncEngineDelegate {
             return map
         }
 
-        print("[CloudSync] batch: \(changes.count) pending, \(records.count) records built")
         let batch = await CKSyncEngine.RecordZoneChangeBatch(pendingChanges: changes) { recordID in
             if let record = records[recordID] {
                 return record
             }
-            print("[CloudSync] batch: no local record for \(recordID.recordName.prefix(8)) – removing from pending")
             // Record no longer exists locally; remove from pending
             syncEngine.state.remove(pendingRecordZoneChanges: [.saveRecord(recordID)])
             return nil
@@ -495,7 +484,6 @@ extension CloudSyncEngine: CKSyncEngineDelegate {
 
         for failedSave in event.failedRecordSaves {
             let failedRecord = failedSave.record
-            print("[CloudSync] FAILED save \(failedRecord.recordType) \(failedRecord.recordID.recordName.prefix(8)): \(failedSave.error)")
 
             switch failedSave.error.code {
             case .serverRecordChanged:
