@@ -623,6 +623,17 @@
         }
       }
     },
+    "alert.file_save.title" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Can't save \"%@\""
+          }
+        }
+      }
+    },
     "alert.save_changes.cancel" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {

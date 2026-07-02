@@ -75,6 +75,10 @@ class ClipboardStore {
     // MARK: - Monitoring
 
     func startMonitoring() {
+        // Called on every settings change – invalidate the previous timer or
+        // each call leaks another poller that keeps recording clipboard
+        // history even after monitoring is turned off
+        timer?.invalidate()
         lastChangeCount = NSPasteboard.general.changeCount
         pruneExpiredEntries()
         timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
@@ -130,9 +134,12 @@ class ClipboardStore {
     private func insertEntry(_ entry: ClipboardEntry) {
         entries.insert(entry, at: 0)
 
-        // FIFO eviction
+        // FIFO eviction – also delete synced records or CloudKit grows forever
         while entries.count > maxEntries {
             let evicted = entries.removeLast()
+            if evicted.kind == .text {
+                CloudSyncEngine.shared.recordDeleted(evicted.id)
+            }
             cleanupImageFile(for: evicted)
         }
 
@@ -188,13 +195,16 @@ class ClipboardStore {
     }
 
     func clearAll() {
-        for entry in entries {
+        // Remove from the array first – cleanupImageFile skips files that a
+        // surviving entry still references
+        let removed = entries
+        entries.removeAll()
+        for entry in removed {
             if entry.kind == .text {
                 CloudSyncEngine.shared.recordDeleted(entry.id)
             }
             cleanupImageFile(for: entry)
         }
-        entries.removeAll()
         scheduleSave()
         NotificationCenter.default.post(name: Self.didChangeNotification, object: nil)
     }
@@ -246,14 +256,13 @@ class ClipboardStore {
         let expired = entries.filter { $0.timestamp < cutoff }
         guard !expired.isEmpty else { return }
 
+        entries.removeAll { $0.timestamp < cutoff }
         for entry in expired {
             cleanupImageFile(for: entry)
             if entry.kind == .text {
                 CloudSyncEngine.shared.recordDeleted(entry.id)
             }
         }
-
-        entries.removeAll { $0.timestamp < cutoff }
         saveEntries()
         NotificationCenter.default.post(name: Self.didChangeNotification, object: nil)
     }
@@ -262,6 +271,9 @@ class ClipboardStore {
 
     func cleanupImageFile(for entry: ClipboardEntry) {
         guard entry.kind == .image, let fileName = entry.imageFileName else { return }
+        // Re-copied image entries share the file – only delete it once no
+        // surviving entry references it, or the remaining card renders blank
+        guard !entries.contains(where: { $0.imageFileName == fileName }) else { return }
         let fileURL = imagesDirectory.appendingPathComponent(fileName)
         try? FileManager.default.removeItem(at: fileURL)
     }
@@ -460,9 +472,12 @@ class ClipboardStore {
     }
 
     private func restoreEntries() {
-        guard let data = try? Data(contentsOf: storageURL),
-              let restored = try? JSONDecoder().decode([ClipboardEntry].self, from: data)
-        else { return }
+        guard let data = try? Data(contentsOf: storageURL) else { return }
+        guard let restored = try? JSONDecoder().decode([ClipboardEntry].self, from: data) else {
+            // Keep a copy of the undecodable file before the next save overwrites it
+            try? data.write(to: storageURL.appendingPathExtension("bak"), options: .atomic)
+            return
+        }
         entries = restored
     }
 }

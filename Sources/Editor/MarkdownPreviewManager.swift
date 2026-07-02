@@ -5,7 +5,7 @@ final class MarkdownPreviewManager {
     private var previewingTabs: Set<TabID> = []
     private var htmlCache: [TabID: String] = [:]
     private var baseURLCache: [TabID: URL] = [:]
-    private var debounceWork: DispatchWorkItem?
+    private var debounceWork: [TabID: DispatchWorkItem] = [:]
 
     func isActive(for tabID: TabID) -> Bool {
         previewingTabs.contains(tabID)
@@ -44,12 +44,14 @@ final class MarkdownPreviewManager {
     /// Debounced re-render on text change.
     func scheduleUpdate(for tabID: TabID, content: String, fileURL: URL?, theme: EditorTheme, onChange: (() -> Void)? = nil) {
         guard previewingTabs.contains(tabID) else { return }
-        debounceWork?.cancel()
+        // Per-tab work items – a shared one lets one previewing tab cancel
+        // another's pending render (stale preview in split panes)
+        debounceWork[tabID]?.cancel()
         let work = DispatchWorkItem { [weak self] in
             self?.render(for: tabID, content: content, fileURL: fileURL, theme: theme)
             onChange?()
         }
-        debounceWork = work
+        debounceWork[tabID] = work
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3, execute: work)
     }
 

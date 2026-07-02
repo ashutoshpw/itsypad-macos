@@ -72,8 +72,10 @@ final class EditorTextView: NSTextView {
     override func mouseDown(with event: NSEvent) {
         NotificationCenter.default.post(name: Self.didReceiveClickNotification, object: self)
 
-        // Click on a highlighted link — open in browser
-        if handleLinkClick(event: event) { return }
+        // Cmd+click on a highlighted link — open in browser. A plain click
+        // must fall through to normal text editing, otherwise link text can
+        // never be selected or receive the cursor.
+        if event.modifierFlags.contains(.command), handleLinkClick(event: event) { return }
 
         // Check if click lands on a checkbox region
         if listsAllowed, SettingsStore.shared.checklistsEnabled, handleCheckboxClick(event: event) { return }
@@ -233,7 +235,7 @@ final class EditorTextView: NSTextView {
             if listsAllowed, let match = ListHelper.parseLine(currentLine), ListHelper.isKindEnabled(match.kind) {
                 if ListHelper.isEmptyItem(currentLine, match: match) {
                     // Empty list item — remove prefix, exit list mode
-                    let prefixRange = NSRange(location: lineRange.location, length: currentLine.count)
+                    let prefixRange = NSRange(location: lineRange.location, length: currentLine.utf16.count)
                     if shouldChangeText(in: prefixRange, replacementString: "") {
                         textStorage?.replaceCharacters(in: prefixRange, with: "")
                         didChangeText()
@@ -400,7 +402,7 @@ final class EditorTextView: NSTextView {
         if shouldChangeText(in: lineRange, replacementString: newText) {
             textStorage?.replaceCharacters(in: lineRange, with: newText)
             didChangeText()
-            setSelectedRange(NSRange(location: lineRange.location, length: newText.count))
+            setSelectedRange(NSRange(location: lineRange.location, length: newText.utf16.count))
         }
     }
 
@@ -454,7 +456,7 @@ final class EditorTextView: NSTextView {
         if shouldChangeText(in: lineRange, replacementString: newText) {
             textStorage?.replaceCharacters(in: lineRange, with: newText)
             didChangeText()
-            setSelectedRange(NSRange(location: lineRange.location, length: newText.count))
+            setSelectedRange(NSRange(location: lineRange.location, length: newText.utf16.count))
         }
     }
 
@@ -554,7 +556,7 @@ final class EditorTextView: NSTextView {
         guard charIndex >= bracketStart && charIndex < bracketEnd else { return false }
 
         let toggled = ListHelper.toggleCheckbox(in: cleanLine)
-        let replaceRange = NSRange(location: lineRange.location, length: cleanLine.count)
+        let replaceRange = NSRange(location: lineRange.location, length: cleanLine.utf16.count)
         if shouldChangeText(in: replaceRange, replacementString: toggled) {
             textStorage?.replaceCharacters(in: replaceRange, with: toggled)
             didChangeText()
@@ -572,11 +574,11 @@ final class EditorTextView: NSTextView {
         let toggled = ListHelper.toggleCheckbox(in: cleanLine)
         guard toggled != cleanLine else { return }
 
-        let replaceRange = NSRange(location: lineRange.location, length: cleanLine.count)
+        let replaceRange = NSRange(location: lineRange.location, length: cleanLine.utf16.count)
         if shouldChangeText(in: replaceRange, replacementString: toggled) {
             textStorage?.replaceCharacters(in: replaceRange, with: toggled)
             didChangeText()
-            let safeLoc = min(sel.location, lineRange.location + toggled.count)
+            let safeLoc = min(sel.location, lineRange.location + toggled.utf16.count)
             setSelectedRange(NSRange(location: safeLoc, length: 0))
         }
     }
@@ -599,7 +601,7 @@ final class EditorTextView: NSTextView {
         if shouldChangeText(in: lineRange, replacementString: newText) {
             textStorage?.replaceCharacters(in: lineRange, with: newText)
             didChangeText()
-            setSelectedRange(NSRange(location: lineRange.location, length: newText.count - (blockText.hasSuffix("\n") ? 1 : 0)))
+            setSelectedRange(NSRange(location: lineRange.location, length: newText.utf16.count - (blockText.hasSuffix("\n") ? 1 : 0)))
         }
     }
 
@@ -641,7 +643,7 @@ final class EditorTextView: NSTextView {
         if shouldChangeText(in: insertRange, replacementString: insertion) {
             textStorage?.replaceCharacters(in: insertRange, with: insertion)
             didChangeText()
-            let newCursorPos = sel.location + insertion.count
+            let newCursorPos = sel.location + insertion.utf16.count
             setSelectedRange(NSRange(location: newCursorPos, length: sel.length))
         }
     }

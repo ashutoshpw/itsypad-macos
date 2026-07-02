@@ -19,6 +19,7 @@ class SyntaxHighlightCoordinator: NSObject, NSTextViewDelegate {
     private(set) var themeIsDark: Bool = EditorTheme.current(for: SettingsStore.shared.appearanceOverride).isDark
 
     private var pendingHighlight: DispatchWorkItem?
+    private var highlightGeneration = 0
     private var lastHighlightedText: String = ""
     private var lastLanguage: String?
     private var lastAppearance: String?
@@ -56,6 +57,9 @@ class SyntaxHighlightCoordinator: NSObject, NSTextViewDelegate {
         let themeName = SyntaxThemeRegistry.cssResource(for: themeId, isDark: isDark)
         let currentFont = font
 
+        // Cancel any queued highlight so this sync hop only ever waits for a
+        // job that is already mid-flight, not a whole backlog.
+        pendingHighlight?.cancel()
         Self.highlightQueue.sync {
             if Self.highlightJS.loadTheme(named: themeName) {
                 NSLog("[SyntaxHighlight] Loaded theme '%@'", themeName)
@@ -108,6 +112,9 @@ class SyntaxHighlightCoordinator: NSObject, NSTextViewDelegate {
     func rehighlight() {
         guard let tv = textView else { return }
         let textSnapshot = tv.string
+        // Same cap as scheduleHighlightIfNeeded – theme changes must not run
+        // a full JS highlight over documents the normal path refuses
+        guard (textSnapshot as NSString).length <= 200_000 else { return }
         let userFont = font
         let currentTheme = theme
         let hlLang = LanguageDetector.shared.highlightrLanguage(for: language)
@@ -122,9 +129,15 @@ class SyntaxHighlightCoordinator: NSObject, NSTextViewDelegate {
 
         let highlightJS = Self.highlightJS
 
-        var work: DispatchWorkItem!
-        work = DispatchWorkItem { [weak self] in
-            guard let self, !work.isCancelled else { return }
+        // Generation counter instead of checking work.isCancelled inside the
+        // block: a work item whose closure references the item itself is a
+        // permanent retain cycle that leaks the item plus its full-document
+        // text snapshot on every keystroke.
+        highlightGeneration &+= 1
+        let generation = highlightGeneration
+
+        let work = DispatchWorkItem { [weak self] in
+            guard self != nil else { return }
             highlightJS.setCodeFont(userFont)
             let highlighted = highlightJS.highlight(textSnapshot, as: hlLang)
             if highlighted == nil {
@@ -132,7 +145,7 @@ class SyntaxHighlightCoordinator: NSObject, NSTextViewDelegate {
             }
 
             DispatchQueue.main.async { [weak self] in
-                guard let self, !work.isCancelled, let tv = self.textView else { return }
+                guard let self, self.highlightGeneration == generation, let tv = self.textView else { return }
                 guard tv.string == textSnapshot else { return }
 
                 let ns = textSnapshot as NSString

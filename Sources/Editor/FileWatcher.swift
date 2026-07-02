@@ -18,16 +18,15 @@ final class FileWatcher {
         )
 
         source.setEventHandler { [weak self] in
-            guard let self else { return }
-            self.debounceWork[url]?.cancel()
-            let work = DispatchWorkItem { [weak self] in
-                guard self != nil else { return }
-                DispatchQueue.main.async {
-                    callback()
-                }
+            // Hop to main before touching debounceWork – the source fires on a
+            // utility queue while watch()/stop() mutate the dictionary on main
+            DispatchQueue.main.async {
+                guard let self else { return }
+                self.debounceWork[url]?.cancel()
+                let work = DispatchWorkItem { callback() }
+                self.debounceWork[url] = work
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2, execute: work)
             }
-            self.debounceWork[url] = work
-            DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 0.2, execute: work)
         }
 
         source.setCancelHandler {

@@ -144,10 +144,19 @@ class TabStore: ObservableObject {
         scheduleSave()
     }
 
+    /// Tabs whose fileURL this process called startAccessingSecurityScopedResource
+    /// on. Stopping a scope that was never started is a documented programmer
+    /// error and can prematurely release access shared with another tab.
+    private var scopedAccessTabIDs: Set<UUID> = []
+
+    func adoptScopedAccess(id: UUID) {
+        scopedAccessTabIDs.insert(id)
+    }
+
     func closeTab(id: UUID) {
         guard let index = tabs.firstIndex(where: { $0.id == id }) else { return }
         let isScratch = tabs[index].fileURL == nil
-        if let url = tabs[index].fileURL {
+        if scopedAccessTabIDs.remove(id) != nil, let url = tabs[index].fileURL {
             url.stopAccessingSecurityScopedResource()
         }
         if isScratch {
@@ -245,37 +254,53 @@ class TabStore: ObservableObject {
         scheduleSave()
     }
 
+    /// Kept outside the @Published tabs array – the caret moves on every
+    /// keystroke and mutating tabs would notify every TabStore observer each
+    /// time. Merged into the persisted session by saveSession.
+    private var cursorPositions: [UUID: Int] = [:]
+
     func updateCursorPosition(id: UUID, position: Int) {
-        guard let index = tabs.firstIndex(where: { $0.id == id }) else { return }
-        tabs[index].cursorPosition = position
+        cursorPositions[id] = position
+    }
+
+    func cursorPosition(for id: UUID) -> Int {
+        cursorPositions[id] ?? tabs.first { $0.id == id }?.cursorPosition ?? 0
     }
 
     // MARK: - File operations
 
-    func saveFile(id: UUID) {
-        guard let index = tabs.firstIndex(where: { $0.id == id }) else { return }
+    /// Returns true only when the content actually reached disk – callers
+    /// (e.g. the close-confirmation flow) must not destroy the tab otherwise.
+    @discardableResult
+    func saveFile(id: UUID) -> Bool {
+        guard let index = tabs.firstIndex(where: { $0.id == id }) else { return false }
 
         if let fileURL = tabs[index].fileURL {
             do {
                 try tabs[index].content.write(to: fileURL, atomically: true, encoding: .utf8)
                 tabs[index].isDirty = false
                 scheduleSave()
+                return true
             } catch {
                 NSLog("Failed to save file: \(error)")
+                presentSaveError(error, name: tabs[index].name)
+                return false
             }
         } else {
-            saveFileAs(id: id)
+            return saveFileAs(id: id)
         }
     }
 
-    func saveFileAs(id: UUID) {
-        guard let index = tabs.firstIndex(where: { $0.id == id }) else { return }
+    /// Returns true only on a completed save; false on cancel or write failure.
+    @discardableResult
+    func saveFileAs(id: UUID) -> Bool {
+        guard let index = tabs.firstIndex(where: { $0.id == id }) else { return false }
 
         let panel = NSSavePanel()
         panel.nameFieldStringValue = tabs[index].name
         panel.canCreateDirectories = true
 
-        guard panel.runModal() == .OK, let url = panel.url else { return }
+        guard panel.runModal() == .OK, let url = panel.url else { return false }
 
         do {
             try tabs[index].content.write(to: url, atomically: true, encoding: .utf8)
@@ -294,9 +319,20 @@ class TabStore: ObservableObject {
             }
 
             scheduleSave()
+            return true
         } catch {
             NSLog("Failed to save file: \(error)")
+            presentSaveError(error, name: tabs[index].name)
+            return false
         }
+    }
+
+    private func presentSaveError(_ error: Error, name: String) {
+        let alert = NSAlert()
+        alert.messageText = String(localized: "alert.file_save.title", defaultValue: "Can't save \"\(name)\"")
+        alert.informativeText = error.localizedDescription
+        alert.alertStyle = .critical
+        alert.runModal()
     }
 
     func openFile() {
@@ -385,10 +421,13 @@ class TabStore: ObservableObject {
         var result = CloudMergeResult()
 
         if let localIndex = tabs.firstIndex(where: { $0.id == data.id }) {
-            // During first sync, local tabs are authoritative – skip updates
-            if CloudSyncEngine.shared.isFirstSync { return }
-            // Only accept cloud version if it's newer than local
-            guard data.lastModified > tabs[localIndex].lastModified else { return }
+            // Only accept cloud version if it's newer than local – this guard
+            // alone protects local content during a first sync too; a blanket
+            // first-sync suppression silently drops legitimate remote edits
+            guard data.lastModified > tabs[localIndex].lastModified else {
+                print("[CloudSync] applyCloudTab: skipped \(data.id.uuidString.prefix(8)) – local newer (local=\(tabs[localIndex].lastModified) cloud=\(data.lastModified))")
+                return
+            }
             if tabs[localIndex].content != data.content
                 || tabs[localIndex].name != data.name
                 || tabs[localIndex].language != data.language {
@@ -427,8 +466,6 @@ class TabStore: ObservableObject {
     }
 
     func removeCloudTab(id: UUID) {
-        // During first sync, local tabs are authoritative – skip removals
-        if CloudSyncEngine.shared.isFirstSync { return }
         guard tabs.contains(where: { $0.id == id }) else { return }
 
         var result = CloudMergeResult()
@@ -578,7 +615,13 @@ class TabStore: ObservableObject {
 
     func saveSession() {
         do {
-            let session = SessionData(tabs: tabs, selectedTabID: selectedTabID, layout: currentLayout)
+            var snapshot = tabs
+            for index in snapshot.indices {
+                if let position = cursorPositions[snapshot[index].id] {
+                    snapshot[index].cursorPosition = position
+                }
+            }
+            let session = SessionData(tabs: snapshot, selectedTabID: selectedTabID, layout: currentLayout)
             let data = try JSONEncoder().encode(session)
             try data.write(to: sessionURL, options: .atomic)
         } catch {
@@ -587,9 +630,16 @@ class TabStore: ObservableObject {
     }
 
     private func restoreSession() {
-        guard let data = try? Data(contentsOf: sessionURL),
-              let session = try? JSONDecoder().decode(SessionData.self, from: data)
-        else { return }
+        guard let data = try? Data(contentsOf: sessionURL) else { return }
+
+        guard let session = try? JSONDecoder().decode(SessionData.self, from: data) else {
+            // The file exists but can't be decoded. Keep a copy before the
+            // next debounced save overwrites it with an empty session –
+            // without this, one bad read permanently destroys every tab.
+            try? data.write(to: sessionURL.appendingPathExtension("bak"), options: .atomic)
+            NSLog("[TabStore] restoreSession: decode failed, backed up session.json")
+            return
+        }
 
         tabs = session.tabs
         selectedTabID = session.selectedTabID ?? tabs.first?.id
@@ -605,7 +655,9 @@ class TabStore: ObservableObject {
                 relativeTo: nil,
                 bookmarkDataIsStale: &isStale
             ) else { continue }
-            _ = resolvedURL.startAccessingSecurityScopedResource()
+            if resolvedURL.startAccessingSecurityScopedResource() {
+                scopedAccessTabIDs.insert(tabs[index].id)
+            }
             tabs[index].fileURL = resolvedURL
             if isStale {
                 tabs[index].bookmark = try? resolvedURL.bookmarkData(

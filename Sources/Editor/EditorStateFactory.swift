@@ -108,7 +108,8 @@ enum EditorStateFactory {
         textView.string = tab.content
         highlighter.language = tab.language
 
-        let pos = min(tab.cursorPosition, (textView.string as NSString).length)
+        // In-session cursor moves live outside the published tab data
+        let pos = min(TabStore.shared.cursorPosition(for: tab.id), (textView.string as NSString).length)
         textView.setSelectedRange(NSRange(location: pos, length: 0))
         textView.scrollRangeToVisible(NSRange(location: pos, length: 0))
     }

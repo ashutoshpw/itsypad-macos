@@ -110,9 +110,13 @@ struct LanguageDetector {
             return Result(lang: lang, confidence: 100)
         }
 
-        // Delegate to highlight.js auto-detection (restricted to our supported languages)
-        if let auto = Self.hljs.highlightAuto(text, subset: Self.autoDetectSubset) {
-            let isProse = Self.looksLikeProse(text)
+        // Delegate to highlight.js auto-detection (restricted to our supported languages).
+        // Cap the input: this runs synchronously on the main thread and hljs
+        // auto-detection over a large pasted document hangs the UI for seconds –
+        // the first 20k characters carry all the signal detection needs.
+        let sample = text.count > 20_000 ? String(text.prefix(20_000)) : text
+        if let auto = Self.hljs.highlightAuto(sample, subset: Self.autoDetectSubset) {
+            let isProse = Self.looksLikeProse(sample)
             let canonical = Self.hljsToCanonical[auto.language] ?? auto.language
             let preview = String(text.prefix(80)).replacingOccurrences(of: "\n", with: "\\n")
             NSLog("[AutoDetect] lang=%@ relevance=%d prose=%d ext=%@ text=\"%@\"",

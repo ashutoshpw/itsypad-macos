@@ -79,6 +79,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSTool
     private var globalSearchController: GlobalSearchController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // CKSyncEngine listens for CloudKit silent pushes itself, but the app
+        // must register with APNs or no pushes are delivered at all – without
+        // this the Mac only learns about remote changes at launch.
+        NSApplication.shared.registerForRemoteNotifications()
+
         setupStatusItem()
         setupEditorWindow()
         setupMainMenu()
@@ -201,7 +206,22 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSTool
         return false
     }
 
+    func application(_ application: NSApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
+        print("[CloudSync] APNs registration OK")
+    }
+
+    func application(_ application: NSApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
+        print("[CloudSync] APNs registration FAILED: \(error)")
+    }
+
+    func applicationDidBecomeActive(_ notification: Notification) {
+        // Pull remote changes when the user comes back to the app – pushes
+        // can be missed while the Mac sleeps
+        CloudSyncEngine.shared.fetchChanges()
+    }
+
     func applicationWillTerminate(_ notification: Notification) {
+        CloudSyncEngine.shared.flushRecordMetadata()
         ClipboardStore.shared.stopMonitoring()
         editorCoordinator?.saveActiveTabCursor()
         TabStore.shared.saveSession()

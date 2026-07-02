@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.17.0
+
+Fixes:
+- iCloud sync now receives remote changes without relaunching the app (push notification registration and fetch on activation)
+- iCloud sync conflict resolution no longer re-uploads stale content, which could revert newer edits made on other devices
+- Closing a tab via "Save" no longer destroys the tab when the save panel is cancelled or the write fails
+- An unreadable session or clipboard file is backed up instead of being overwritten with an empty one
+- Clipboard monitoring no longer leaks pollers on settings changes (previously kept recording history even when turned off)
+- Clipboard entries evicted by the history limit are now also deleted from iCloud
+- Re-copied image entries no longer lose their image when the original entry is deleted
+- Fixed text corruption and cursor misplacement in checkbox, indent and line operations on lines with emoji
+- Undo no longer corrupts text after a file is reloaded from disk or updated by iCloud sync
+- Fixed a memory leak in syntax highlighting (one full-document copy per keystroke)
+- Language auto-detection no longer freezes the app after pasting very large documents
+- File save failures now show an alert instead of failing silently
+- Links now open with Cmd+click, so link text can be selected and edited normally
+- Fixed a race in external file change watching
+- Markdown previews in split panes no longer show stale content
+
 ## 1.16.0
 
 Features:

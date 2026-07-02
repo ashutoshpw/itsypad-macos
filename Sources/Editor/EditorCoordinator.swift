@@ -362,9 +362,14 @@ final class EditorCoordinator: BonsplitDelegate, @unchecked Sendable {
             return
         }
 
-        _ = url.startAccessingSecurityScopedResource()
+        let scoped = url.startAccessingSecurityScopedResource()
         tabStore.openFile(url: url)
         guard let newTab = tabStore.tabs.last else { return }
+        if scoped, newTab.fileURL == url {
+            // Register ownership so closeTab balances the scope – stopping an
+            // unowned scope is a programmer error
+            tabStore.adoptScopedAccess(id: newTab.id)
+        }
         if let bonsplitTabID = controller.createTab(
             title: newTab.name,
             icon: nil,
@@ -781,8 +786,9 @@ final class EditorCoordinator: BonsplitDelegate, @unchecked Sendable {
         let response = alert.runModal()
         switch response {
         case .alertFirstButtonReturn:
-            tabStore.saveFile(id: tab.id)
-            return true
+            // Close only if the save actually completed – cancelling the save
+            // panel or a write failure must keep the tab (and its content) alive
+            return tabStore.saveFile(id: tab.id)
         case .alertSecondButtonReturn:
             return true
         default:
@@ -825,9 +831,14 @@ final class EditorCoordinator: BonsplitDelegate, @unchecked Sendable {
 
         let cursorPos = state.textView.selectedRange().location
         _ = tabStore.reloadFromDisk(id: tabID)
-        let tab = tabStore.tabs[index]
+        // Re-resolve: the modal run loop above still delivers main-queue work
+        // (e.g. cloud merges) that can reorder tabs, so `index` may be stale
+        guard let tab = tabStore.tabs.first(where: { $0.id == tabID }) else { return }
 
         state.textView.string = tab.content
+        // The old undo stack references ranges in the replaced text – replaying
+        // them against the new content corrupts it or raises range exceptions
+        state.textView.undoManager?.removeAllActions()
         let clampedPos = min(cursorPos, (tab.content as NSString).length)
         state.textView.setSelectedRange(NSRange(location: clampedPos, length: 0))
         state.highlightCoordinator.scheduleHighlightIfNeeded()
@@ -864,6 +875,7 @@ final class EditorCoordinator: BonsplitDelegate, @unchecked Sendable {
 
             let cursorPos = state.textView.selectedRange().location
             state.textView.string = tab.content
+            state.textView.undoManager?.removeAllActions()
             let clampedPos = min(cursorPos, (tab.content as NSString).length)
             state.textView.setSelectedRange(NSRange(location: clampedPos, length: 0))
             state.highlightCoordinator.language = tab.language
