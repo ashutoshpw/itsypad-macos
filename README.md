@@ -6,7 +6,7 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Swift 5.9](https://img.shields.io/badge/swift-5.9-orange.svg)](https://swift.org)
 [![macOS 14+](https://img.shields.io/badge/macOS-14%2B-brightgreen.svg)](https://www.apple.com/macos/sonoma/)
-[![Homebrew](https://img.shields.io/badge/homebrew-tap-yellow.svg)](https://github.com/nickustinov/homebrew-tap)
+[![Homebrew Cask](https://img.shields.io/homebrew/cask/v/itsypad)](https://formulae.brew.sh/cask/itsypad)
 
 A tiny, fast scratchpad and clipboard manager for Mac. [itsypad.app](https://itsypad.app)
 
@@ -100,7 +100,7 @@ Itsypad is also on [iPhone and iPad](https://apps.apple.com/app/itsypad/id675899
 ## Install
 
 ```bash
-brew install --cask nickustinov/tap/itsypad
+brew install --cask itsypad
 ```
 
 Or download the latest DMG from [GitHub releases](https://github.com/nickustinov/itsypad-macos/releases).
@@ -333,11 +333,10 @@ gh release create v<VERSION> dist/itsypad-<VERSION>.dmg \
 git fetch --tags
 ```
 
-6. Update the Homebrew tap:
+6. Update the Homebrew cask (in [homebrew-cask](https://github.com/Homebrew/homebrew-cask)):
 
 ```bash
-shasum -a 256 dist/itsypad-<VERSION>.dmg
-# Update Casks/itsypad.rb in homebrew-tap with new version and sha256
+brew bump-cask-pr itsypad --version <VERSION>
 ```
 
 ### App Store release
