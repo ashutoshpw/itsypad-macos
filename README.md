@@ -333,11 +333,7 @@ gh release create v<VERSION> dist/itsypad-<VERSION>.dmg \
 git fetch --tags
 ```
 
-6. Update the Homebrew cask (in [homebrew-cask](https://github.com/Homebrew/homebrew-cask)):
-
-```bash
-brew bump-cask-pr itsypad --version <VERSION>
-```
+The [Homebrew cask](https://formulae.brew.sh/cask/itsypad) is updated automatically – BrewTestBot picks up the new GitHub release and opens a bump PR, usually within a day. To push the update out immediately instead: `brew bump-cask-pr itsypad --version <VERSION>`.
 
 ### App Store release
 
