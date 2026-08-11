@@ -123,6 +123,77 @@ final class LanguageDetectorTests: XCTestCase {
         XCTAssertEqual(result.lang, "plain")
     }
 
+    func testMarkdownWithLabeledFencedCodeStaysMarkdown() {
+        let code = Array(repeating: "local value = \"text\"", count: 8).joined(separator: "\n")
+        let text = """
+        # Title
+
+        Normal text.
+
+        ```lua
+        \(code)
+        ```
+
+        Normal text.
+        """
+
+        XCTAssertEqual(detector.detect(text: text, name: nil, fileURL: nil).lang, "markdown")
+    }
+
+    func testMarkdownWithUnlabeledFencedCodeStaysMarkdown() {
+        let code = Array(repeating: "local value = \"text\"", count: 8).joined(separator: "\n")
+        let text = """
+        # Title
+
+        ```
+        \(code)
+        ```
+        """
+
+        XCTAssertEqual(detector.detect(text: text, name: nil, fileURL: nil).lang, "markdown")
+    }
+
+    func testMarkdownWithTildeFencedCodeStaysMarkdown() {
+        let code = Array(repeating: "local value = \"text\"", count: 8).joined(separator: "\n")
+        let text = """
+        # Title
+
+        ~~~lua
+        \(code)
+        ~~~
+        """
+
+        XCTAssertEqual(detector.detect(text: text, name: nil, fileURL: nil).lang, "markdown")
+    }
+
+    func testMarkdownWithIndentedCodeStaysMarkdown() {
+        let code = Array(repeating: "    local value = \"text\"", count: 8).joined(separator: "\n")
+        let text = """
+        # Title
+
+        Normal text.
+
+        \(code)
+
+        Normal text.
+        """
+
+        XCTAssertEqual(detector.detect(text: text, name: nil, fileURL: nil).lang, "markdown")
+    }
+
+    func testBashWithHeadingLikeCommentAndIndentedCodeStaysBash() {
+        let text = """
+        #!/bin/bash
+        # Title
+        if [[ -n "$HOME" ]]; then
+            local value="text"
+            echo "$value"
+        fi
+        """
+
+        XCTAssertEqual(detector.detect(text: text, name: nil, fileURL: nil).lang, "bash")
+    }
+
     // MARK: - detectFromExtension
 
     func testDetectFromExtensionKnown() {

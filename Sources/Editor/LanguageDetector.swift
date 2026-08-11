@@ -115,8 +115,15 @@ struct LanguageDetector {
         // auto-detection over a large pasted document hangs the UI for seconds –
         // the first 20k characters carry all the signal detection needs.
         let sample = text.count > 20_000 ? String(text.prefix(20_000)) : text
-        if let auto = Self.hljs.highlightAuto(sample, subset: Self.autoDetectSubset) {
-            let isProse = Self.looksLikeProse(sample)
+        let isMarkdown = Self.looksLikeMarkdown(sample)
+        let detectionSample = isMarkdown
+            ? Self.removingMarkdownCodeBlocks(
+                from: sample,
+                removeIndentedCode: Self.hasStrongMarkdownEvidence(sample)
+            )
+            : sample
+        if let auto = Self.hljs.highlightAuto(detectionSample, subset: Self.autoDetectSubset) {
+            let isProse = Self.looksLikeProse(detectionSample)
             let canonical = Self.hljsToCanonical[auto.language] ?? auto.language
             let preview = String(text.prefix(80)).replacingOccurrences(of: "\n", with: "\\n")
             NSLog("[AutoDetect] lang=%@ relevance=%d prose=%d ext=%@ text=\"%@\"",
@@ -129,26 +136,34 @@ struct LanguageDetector {
 
         // Markdown content detection — excluded from highlight.js auto-detect
         // because it produces false positives, but targeted patterns are reliable.
-        if Self.looksLikeMarkdown(text) {
+        if isMarkdown {
             return Result(lang: "markdown", confidence: 10)
         }
 
         return Result(lang: "plain", confidence: 0)
     }
 
+    /// Markdown patterns that do not commonly overlap source-code comments.
+    private static let strongMarkdownPatternSources = [
+        "(?:^|\\n) {0,3}(?:`{3,}|~{3,})[^\\n]*", // fenced code block
+        "\\*\\*[^*]+\\*\\*",                   // **bold**
+        "(?:^|\\n)- \\[[ xX]\\] ",             // - [ ] checklist
+        "\\[[^\\]]+\\]\\([^)]+\\)",             // [link](url)
+        "==[^=]+==",                              // ==highlight==
+        "(?:^|\\n)> ",                           // > blockquote
+        "(?:^|\\n)[ \\t]*\\|?[ \\t]*:?-{3,}:?[ \\t]*(?:\\|[ \\t]*:?-{3,}:?[ \\t]*)+\\|?", // table separator
+    ]
+
+    private static let markdownHeadingPatternSource = "(?:^|\\n)#{1,6} \\S"
+    private static let markdownHeadingPattern = try! NSRegularExpression(pattern: markdownHeadingPatternSource)
+    private static let strongMarkdownPatterns = strongMarkdownPatternSources.map {
+        try! NSRegularExpression(pattern: $0)
+    }
+
     /// Returns true when text contains distinctive markdown syntax.
-    private static let markdownPatterns: [NSRegularExpression] = {
-        let patterns = [
-            "\\*\\*[^*]+\\*\\*",           // **bold**
-            "(?:^|\\n)#{1,6} \\S",         // # heading
-            "(?:^|\\n)- \\[[ xX]\\] ",     // - [ ] checklist
-            "\\[[^\\]]+\\]\\([^)]+\\)",     // [link](url)
-            "==[^=]+==" ,                   // ==highlight==
-            "(?:^|\\n)> ",                  // > blockquote
-            "(?:^|\\n)[ \\t]*\\|?[ \\t]*:?-{3,}:?[ \\t]*(?:\\|[ \\t]*:?-{3,}:?[ \\t]*)+\\|?", // | --- | --- | table separator
-        ]
-        return patterns.compactMap { try? NSRegularExpression(pattern: $0) }
-    }()
+    private static let markdownPatterns = (strongMarkdownPatternSources + [markdownHeadingPatternSource]).map {
+        try! NSRegularExpression(pattern: $0)
+    }
 
     private static func looksLikeMarkdown(_ text: String) -> Bool {
         let range = NSRange(location: 0, length: min((text as NSString).length, 4000))
@@ -158,6 +173,60 @@ struct LanguageDetector {
             }
         }
         return false
+    }
+
+    private static func hasStrongMarkdownEvidence(_ text: String) -> Bool {
+        let range = NSRange(location: 0, length: min((text as NSString).length, 4000))
+        if strongMarkdownPatterns.contains(where: { $0.firstMatch(in: text, range: range) != nil }) {
+            return true
+        }
+
+        guard markdownHeadingPattern.firstMatch(in: text, range: range) != nil else { return false }
+        return text.components(separatedBy: "\n").contains { rawLine in
+            guard !rawLine.hasPrefix("\t"), !rawLine.hasPrefix("    ") else { return false }
+            let line = rawLine.trimmingCharacters(in: .whitespaces)
+            guard !line.hasPrefix("#"), line.split(separator: " ").count >= 2 else { return false }
+            return line.last.map { ".!?".contains($0) } ?? false
+        }
+    }
+
+    /// Removes code embedded in a Markdown document before generic language
+    /// auto-detection. Embedded code can otherwise outweigh the surrounding
+    /// Markdown and make the preview disappear as the block grows.
+    private static func removingMarkdownCodeBlocks(from text: String, removeIndentedCode: Bool) -> String {
+        var openFence: (character: Character, length: Int)?
+
+        return text.components(separatedBy: "\n").map { line in
+            if let fence = fence(in: line) {
+                if let activeFence = openFence {
+                    if fence.character == activeFence.character,
+                       fence.length >= activeFence.length,
+                       fence.remainder.allSatisfy({ $0.isWhitespace }) {
+                        openFence = nil
+                    }
+                } else {
+                    openFence = (fence.character, fence.length)
+                }
+                return ""
+            }
+
+            if openFence != nil
+                || (removeIndentedCode && (line.hasPrefix("\t") || line.hasPrefix("    "))) {
+                return ""
+            }
+            return line
+        }.joined(separator: "\n")
+    }
+
+    private static func fence(in line: String) -> (character: Character, length: Int, remainder: Substring)? {
+        let leadingSpaces = line.prefix { $0 == " " }.count
+        guard leadingSpaces <= 3 else { return nil }
+
+        let content = line.dropFirst(leadingSpaces)
+        guard let character = content.first, character == "`" || character == "~" else { return nil }
+        let length = content.prefix { $0 == character }.count
+        guard length >= 3 else { return nil }
+        return (character, length, content.dropFirst(length))
     }
 
     /// Returns true when text is predominantly natural-language prose.
