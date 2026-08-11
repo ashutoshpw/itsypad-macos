@@ -630,6 +630,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, NSTool
         editorCoordinator?.activeTextView()?.toggleChecklist()
     }
 
+    @objc func indentAction() {
+        editorCoordinator?.activeTextView()?.indentLines()
+    }
+
+    @objc func outdentAction() {
+        editorCoordinator?.activeTextView()?.outdentLines()
+    }
+
     @objc func moveLineUpAction() {
         editorCoordinator?.activeTextView()?.moveLine(.up)
     }

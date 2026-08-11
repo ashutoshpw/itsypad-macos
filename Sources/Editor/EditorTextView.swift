@@ -373,11 +373,38 @@ final class EditorTextView: NSTextView {
     // MARK: - Block indent / unindent
 
     override func insertBacktab(_ sender: Any?) {
+        outdentLines()
+    }
+
+    func indentLines() {
+        let sel = selectedRange()
+        if sel.length > 0 {
+            indentSelectedLines()
+        } else {
+            indentCurrentLine()
+        }
+    }
+
+    func outdentLines() {
         let sel = selectedRange()
         if sel.length > 0 {
             unindentSelectedLines()
         } else {
             unindentCurrentLine()
+        }
+    }
+
+    private func indentCurrentLine() {
+        let indent = SettingsStore.shared.indentString
+        let ns = string as NSString
+        let sel = selectedRange()
+        let lineRange = ns.lineRange(for: NSRange(location: sel.location, length: 0))
+        let insertRange = NSRange(location: lineRange.location, length: 0)
+
+        if shouldChangeText(in: insertRange, replacementString: indent) {
+            textStorage?.replaceCharacters(in: insertRange, with: indent)
+            didChangeText()
+            setSelectedRange(NSRange(location: sel.location + indent.utf16.count, length: 0))
         }
     }
 

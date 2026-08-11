@@ -183,6 +183,18 @@ class MenuBuilder {
         toggleChecklistItem.target = target
         menu.addItem(toggleChecklistItem)
 
+        let outdentItem = NSMenuItem(title: String(localized: "menu.edit.outdent", defaultValue: "Outdent"), action: #selector(AppDelegate.outdentAction), keyEquivalent: "[")
+        outdentItem.image = NSImage(systemSymbolName: "decrease.indent", accessibilityDescription: nil)
+        outdentItem.keyEquivalentModifierMask = [.command]
+        outdentItem.target = target
+        menu.addItem(outdentItem)
+
+        let indentItem = NSMenuItem(title: String(localized: "menu.edit.indent", defaultValue: "Indent"), action: #selector(AppDelegate.indentAction), keyEquivalent: "]")
+        indentItem.image = NSImage(systemSymbolName: "increase.indent", accessibilityDescription: nil)
+        indentItem.keyEquivalentModifierMask = [.command]
+        indentItem.target = target
+        menu.addItem(indentItem)
+
         let moveUpItem = NSMenuItem(title: String(localized: "menu.edit.move_line_up", defaultValue: "Move line up"), action: #selector(AppDelegate.moveLineUpAction), keyEquivalent: "")
         moveUpItem.image = NSImage(systemSymbolName: "arrow.up", accessibilityDescription: nil)
         moveUpItem.keyEquivalent = String(UnicodeScalar(NSUpArrowFunctionKey)!)

@@ -4484,6 +4484,17 @@
         }
       }
     },
+    "menu.edit.indent" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Indent"
+          }
+        }
+      }
+    },
     "menu.edit.move_line_down" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
@@ -4634,6 +4645,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "上移行"
+          }
+        }
+      }
+    },
+    "menu.edit.outdent" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Outdent"
           }
         }
       }
