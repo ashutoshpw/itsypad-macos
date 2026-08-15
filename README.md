@@ -279,9 +279,7 @@ Tests/
 ├── SyntaxThemeRegistryTests.swift
 └── TabStoreTests.swift
 scripts/
-├── build-release.sh                    # Build, sign, and package DMG for direct distribution
-├── pull-translations.sh                # Pull translations from Lokalise into xcstrings
-└── push-translations.sh               # Push English source strings to Lokalise
+└── build-release.sh                    # Build, sign, and package DMG for direct distribution
 ```
 
 ## Requirements
@@ -343,34 +341,9 @@ The [Homebrew cask](https://formulae.brew.sh/cask/itsypad) is updated automatica
 
 ## Localization
 
-Itsypad uses a Swift String Catalog (`Sources/Resources/Localizable.xcstrings`) for localization. Translations are managed via [Lokalise](https://lokalise.com).
+Itsypad uses a Swift String Catalog (`Sources/Resources/Localizable.xcstrings`) for localization. Translations are edited directly in the xcstrings file.
 
 Languages: English (base), Spanish, French, German, Russian, Japanese, Simplified Chinese, Traditional Chinese, Korean, Portuguese (Brazil), Italian, Polish.
-
-### Setup
-
-```bash
-brew tap lokalise/cli-2
-brew install lokalise2
-cp lokalise.yml.example lokalise.yml
-# Edit lokalise.yml and add your API token
-```
-
-### Push source strings to Lokalise
-
-Extracts English keys and values from the xcstrings file and uploads to Lokalise:
-
-```bash
-scripts/push-translations.sh
-```
-
-### Pull translations from Lokalise
-
-Downloads all translations from Lokalise and merges them into the xcstrings file:
-
-```bash
-scripts/pull-translations.sh
-```
 
 ### Adding new strings
 
@@ -405,17 +378,8 @@ Keys use dot-separated structured names: `{area}.{context}.{name}`
 ### Workflow after adding new strings
 
 1. Build the project – Xcode auto-populates new keys in `Localizable.xcstrings`
-2. Push source strings to Lokalise: `scripts/push-translations.sh`
-3. Translate in [Lokalise](https://app.lokalise.com) (or let translators handle it)
-4. Pull translations back: `scripts/pull-translations.sh`
-5. Build and verify
-
-### How it works
-
-- All strings (SwiftUI and AppKit) use `String(localized:defaultValue:)` with structured keys
-- Xcode populates the `.xcstrings` file with discovered keys on each build
-- Push extracts English as `.strings` and uploads to Lokalise
-- Pull downloads `.strings` per language and merges back into the xcstrings file
+2. Add translations for all languages directly in `Localizable.xcstrings`
+3. Build and verify
 
 ## License
 

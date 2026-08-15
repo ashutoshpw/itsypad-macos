@@ -17,7 +17,7 @@ Always run `xcodegen generate` after changing `project.yml` or adding/removing s
 - `Sources/` – app code (App, Editor, Clipboard, Settings, Hotkey, Resources)
 - `Tests/` – unit tests (295 tests)
 - `Packages/Bonsplit/` – local Swift package for split panes and tab bar
-- `scripts/` – build and translation scripts
+- `scripts/` – build scripts
 - `project.yml` – XcodeGen project definition
 
 ## Localization
@@ -32,11 +32,7 @@ Key format: `{area}.{context}.{name}` – e.g. `menu.file.*`, `alert.save_change
 
 After adding new strings:
 1. Build (Xcode populates `Sources/Resources/Localizable.xcstrings`)
-2. `scripts/push-translations.sh` (push English to Lokalise)
-3. Translate in Lokalise
-4. `scripts/pull-translations.sh` (pull translations back)
-
-Lokalise config: `lokalise.yml` (gitignored). Copy from `lokalise.yml.example`.
+2. Claude translates the new keys into all 12 languages (de, en, es, fr, it, ja, ko, pl, pt-BR, ru, zh-Hans, zh-Hant) directly in `Localizable.xcstrings`, with `state: "translated"` on each non-English unit
 
 ## Distribution
 
