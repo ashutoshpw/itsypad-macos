@@ -9,5 +9,6 @@ let package = Package(
     ],
     targets: [
         .target(name: "Bonsplit", dependencies: [], path: "Sources/Bonsplit"),
+        .testTarget(name: "BonsplitTests", dependencies: ["Bonsplit"], path: "Tests/BonsplitTests"),
     ]
 )

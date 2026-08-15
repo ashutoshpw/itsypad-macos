@@ -71,6 +71,10 @@ struct TabBarView: View {
                         )
                     }
                     .coordinateSpace(name: "tabScroll")
+                    .overlay {
+                        HorizontalScrollWheelBridge()
+                            .allowsHitTesting(false)
+                    }
                     .onAppear {
                         containerWidth = containerGeo.size.width
                         if let tabId = pane.selectedTabId {
