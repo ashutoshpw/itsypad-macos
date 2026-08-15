@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.18.0
+
+Features:
+- Indent and outdent lines with ⌘] and ⌘[, also available in the Edit menu (#119, thanks @ashutoshpw)
+
+Fixes:
+- Markdown notes with code blocks no longer lose the preview or get re-highlighted as source code as the block grows (#120, thanks @ashutoshpw)
+- Mouse-wheel scrolling now scrolls the tab bar when tabs overflow (#121, thanks @ashutoshpw)
+
 ## 1.17.0
 
 Fixes:
